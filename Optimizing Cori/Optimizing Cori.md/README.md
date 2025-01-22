@@ -46,11 +46,11 @@ Data source: Jobs executed on the Cori supercomputer during one week in 2020.
 
 **Data Preparation**
 
-  *Handled missing values and outliers.
+  * Handled missing values and outliers.
 
-  *Converted data types and metrics for consistency.
+  * Converted data types and metrics for consistency.
 
-  *Performed exploratory data analysis (EDA) to visualize trends.
+  * Performed exploratory data analysis (EDA) to visualize trends.
 
 **Analysis Techniques**
 
@@ -70,13 +70,13 @@ Data source: Jobs executed on the Cori supercomputer during one week in 2020.
 
 ### Evaluation Metrics
 
-  *Cross-Validation (CV)
+  * Cross-Validation (CV)
 
-  *Root Mean Squared Error (RMSE)
+  * Root Mean Squared Error (RMSE)
 
-  *Mean Squared Error (MSE)
+  * Mean Squared Error (MSE)
 
-  *Mean Absolute Error (MAE)
+  * Mean Absolute Error (MAE)
 
 ### Results
 
@@ -84,29 +84,29 @@ Data source: Jobs executed on the Cori supercomputer during one week in 2020.
 
 1.**Workload Patterns:**
 
-  *Weekdays show higher computational load, peaking during business hours (6 AM - 7 PM).
+  * Weekdays show higher computational load, peaking during business hours (6 AM - 7 PM).
 
-  *Weekends exhibit reduced execution times.
+  * Weekends exhibit reduced execution times.
 
 2.**Optimal Predictive Model:** Random Forest achieved the lowest error metrics:
 
-  *RMSE: 11.86
+  * RMSE: 11.86
 
-  *MSE: 140.66
+  * MSE: 140.66
 
-  *MAE: 6.67
+  * MAE: 6.67
 
 3.**Correlation Insights:**
 
-  *Strong correlation between computational load and power consumption.
+  * Strong correlation between computational load and power consumption.
 
-  *Moderate correlation between power and memory usage.
+  * Moderate correlation between power and memory usage.
 
-  *Weak correlation between memory and computational load.
+  * Weak correlation between memory and computational load.
 
 4.**High Utilization Periods:**
 
-  *Significant peaks in CPU and memory utilization on December 1st, 3rd, 5th, and 6th.
+  * Significant peaks in CPU and memory utilization on December 1st, 3rd, 5th, and 6th.
 
 ### Strategies for Improvement
 
@@ -122,19 +122,19 @@ Data source: Jobs executed on the Cori supercomputer during one week in 2020.
 
 **Limitations**
 
-  *Data limited to a single week, reducing generalizability.
+  * Data limited to a single week, reducing generalizability.
 
-  *Instances of negative memory consumption suggest potential data errors.
+  * Instances of negative memory consumption suggest potential data errors.
 
-  *Multicollinearity between features posed challenges.
+  * Multicollinearity between features posed challenges.
 
 **Future Improvements**
 
-  *Expand analysis with larger datasets (monthly/yearly).
+  * Expand analysis with larger datasets (monthly/yearly).
 
-  *Address multicollinearity using advanced techniques.
+  * Address multicollinearity using advanced techniques.
 
-  *Collaborate with domain experts to resolve data inconsistencies.
+  * Collaborate with domain experts to resolve data inconsistencies.
 
 ### Conclusion
 
