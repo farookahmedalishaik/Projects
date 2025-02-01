@@ -1,0 +1,1394 @@
+---
+title: "TELECOMMUNICATIONS CUSTOMER CHURN PREDICTION"
+subtitle: "Farook Ahmed Ali Shaik"
+output: pdf_document
+
+fontfamily: mathpazo
+fontsize: 11pt
+header-includes:
+   - \linespread{1.05}
+urlcolor: blue
+---
+
+# INTRODUCTION 
+
+
+
+**Q1: Describe the dataset. What is the dataset about?**
+
+The dataset is a customer churn prediction dataset consists **7043** *rows* and **21** *columns* chosen from kaggle dataset which is from a telecommunications company, and this dataset contains information about customers' demographics, service usage, and churn status.
+
+### VARIABLES ARE:
+
+**Categorical data**: gender, Partner, Dependents, PhoneService, MultipleLines, InternetService, OnlineSecurity, OnlineBackup, DeviceProtection, TechSupport, StreamingTV, StreamingMovies, Contract, PaperlessBilling, PaymentMethod, Churn, SeniorCitizen.
+
+**Integer data**: tenure
+
+**Double/Float**: MonthlyCharges, ToalCharges
+
+**String**: CutomerID
+
+
+
+
+
+**Q2: Explain briefly on the target population, sampling strategies, potential bias, etc.**
+
+The target population included of customers for the telecommunications company and possibly the data might have collected through random sampling method and also might or might not include potential biases like overrepresentation or underrepresentation of specific groups, like age, gender, or contract type, which could affect churn predictions.
+
+Also expecting few of the variables might undergo skewness interms of the data distribution that needs to be addresed if present.
+
+
+
+
+
+**Q3: Identify and define prediction problem(s).**
+
+The main prediction problem is to predict whether a customer will **churn (yes/no)**. The target variable is **churn** and the goal is to use the varibles/features from the dataset to develop an efficient predictive model.
+
+
+
+
+
+**Q4: Discuss how to split the data into training and test sets.**
+
+The data is split into training, validation, and test sets as **(70%,15%,15%)** proportions respectively. Using the createDataPartition function from the caret package, the data is split stratified to ensure that both the training and test sets maintain a similar distribution of the **Churn** variable (i.e., the proportion of churn and non-churn customers). This approach helps to address potential class imbalance.
+
+
+## CODE
+```{r,message=FALSE,warning=FALSE}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(rsample)
+library(caret)
+library(e1071)  
+library(reshape2)  
+library(cowplot)
+library(gridExtra) 
+library(randomForest)
+library(pROC) 
+library(xgboost)
+library(randomForest)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "D:/.4 SEMESTERS KSU/2_FALL 2024 KSU/Statistical Learning/Final Project SL")
+
+```
+
+```{r,message=FALSE}
+
+setwd("D:\\.4 SEMESTERS KSU\\2_FALL 2024 KSU\\Statistical Learning\\Final Project SL")
+
+data <- read_csv("WA_Fn-UseC_-Telco-Customer-Churn.csv")
+```
+
+```{r}
+df <- data
+
+#displaying the first 5 columns of the df data
+head(df,3)
+```
+
+```{r}
+summary(df)
+```
+we can observe there are **NA's** present in **TotalCharges** variable which is going to get addressed soon in next code chunks and we have to convert the **SeniorCitizen** variable to categorical type which is supposed to be.
+
+
+
+
+
+
+## CONVERTING CATEGORY TO FACTORS
+
+Categorical Variables need to get converted to factors for proper statistical handling and also ensures correct encoding and treatment in models.
+
+Binary Conversion, SeniorCitizen variable which is stored as 0's &1's need to get converted to a factor with meaningful labels.
+
+
+```{r}
+selected_columns <- c(
+  "gender", "Partner", "Dependents", "PhoneService", "MultipleLines",
+  "InternetService", "OnlineSecurity", "OnlineBackup", "DeviceProtection",
+  "TechSupport", "StreamingTV", "StreamingMovies", "Contract",
+  "PaperlessBilling", "PaymentMethod", "Churn"
+)
+
+# Apply conversion to factors
+df[selected_columns] <- lapply(df[selected_columns], as.factor)
+
+
+# converting SeniorCitizen variable to factor/categorical
+df$SeniorCitizen <- factor(df$SeniorCitizen, levels = c(0, 1), labels = c("No", "Yes"))
+
+
+glimpse(df)
+```
+
+
+
+
+
+## HANDLING MISSING VALUES USING MEDIAN IMPUTATION 
+
+
+For the missing values in the **TotalCharges column (11 NA'S)**, I am going to use median imputation and I belileve it is a good choice because for numerical features with a small number of missing values like 11 i believe median imputation works fine.
+
+Also it is less sensitive to outliers compared to mean imputation.And not wanted to go for PMM imputation or other complex methods beacuse it is not necessary so to use for less missing values.
+
+
+## CHECK FOR MISSING VALUES
+```{r}
+colSums(is.na(df))
+```
+
+So Clearly even we observed earlier there are few **NA's** are present in **TotalCharges** variable which are being addresed below.
+
+```{r}
+# Handling missing values using medain imputation
+df$TotalCharges[is.na(df$TotalCharges)] <- median(df$TotalCharges, na.rm = TRUE)
+
+sum(is.na(df))
+```
+
+
+## CHECK FOR CLASS DISTRIBUTION
+```{r}
+table(df$Churn)              
+prop.table(table(df$Churn)) 
+```
+The proportions in the dataset show that a ***significant imbalance is present between the No (73.5%) and Yes (26.5%) classes*** in the Churn variable. So there's a high chance the train and test datasets may not reflect the original distribution of Churn, and will lead to biased models, especially for the minority class = Yes. So this issue is addresed below.
+
+
+
+
+## STRATIFIED DATA SPLIT INTO TRAIN, VALID, TEST DATA SETS
+
+```{r}
+set.seed(123)
+
+#createDataPartition from caret package addresses the imbalance issue by performing a stratified split by default.
+train_index <- createDataPartition(df$Churn, p = 0.7, list = FALSE)
+train_data <- df[train_index, ]
+
+# Remaining data for validation and test sets
+remaining_data <- df[-train_index, ]
+
+valid_index <- createDataPartition(remaining_data$Churn, p = 0.5, list = FALSE)
+valid_data <- remaining_data[valid_index, ]
+test_data <- remaining_data[-valid_index, ]
+
+# Checking the proportions in each split and they successfully train,valid,test data sets has equal proportions of classes after split
+prop.table(table(train_data$Churn))
+
+prop.table(table(valid_data$Churn))
+
+prop.table(table(test_data$Churn))
+
+```
+
+
+
+
+# STATISTICAL LEARNING STRATEGIES AND METHODS 
+
+
+**Q1: Perform exploratory data analysis using the training set.**
+
+
+### FOR NUMERICAL DATA:
+
+**Histograms/Density Plots**: Examining individual distributions of numerical features inorder to understand their spread, central tendency, and potential skewness.
+
+**Boxplots**: To visualize the distribution and also to identify outliers if any like boxplots of numerical variables *(tenure, MonthlyCharges, TotalCharges)* and plotting boxplots conditioned with target variable to know its relationships with the target (e.g., churn or no churn).
+
+**Correlation Matrix and Correlation Coefficients**: Calculating correlations between numerical variables to identify linear dependencies to address and avoid multicollinearity issue if present. And plotting a heatmap for visualization.
+
+
+### FOR CATEGORICAL DATA:
+
+**Bar Charts (Unconditioned)**: Analyzing the frequency distributions for categorical variables independently.
+
+**Bar Charts (Conditioned on Target Variable)**: To know how each categorical variable interacts with target variable, which might possiblly can reveal significant patterns or predictors.
+
+**Cross Tabulation and Chi-Square Test**: To know the the dependency between categorical variables and the target variable which helps in assessing statistical significance and drop out the insignificant varibles that have no impact in churn prediction.
+
+
+
+
+
+
+
+
+**Q2: Describe statistical learning approaches and strategies for feature engineering.**
+
+**Feature Engineering Strategies**: Feature Engineering is being performed after splitting the data into training, validation, and test sets because to prevent Data Leakage.
+
+
+### NUMERICAL FEATURES:
+
+**1.Creating two new features ServiceCount and tenurebin and apply for all the train,valid, and test datasets.**
+
+- **ServiceCount**: Sum of binary service indicators like PhoneService, MultipleLines, and etc.
+
+- **Tenure**: Binning the tenure variable into categories.
+
+
+**2. Skewness**: Finding SKewness and if present apply transofrmation/standardization like log transformation.
+
+**3.Handling Outliers**: Using IQR method or Z- Score to address outliers if present.
+
+**4. Correlation Analysis**: Plotting correlation matrix, correlation coefficients and is computed to identify multicollinearity among features and drop out highly correlated features to reduce redundancy as well.
+
+**5. Feature Selection**: Selecting features with strong correlation to the target variable and also using domain knowledge and statistical methods to retain only the most relevant features.
+
+
+
+
+
+### CATEGORICAL FEATURES
+
+The categorical features need to get converted to numerical way so that the models can perform better and provide better results.
+
+**1. Transformation**: Using one hot encoding to convert categorical variables into numerical format.
+
+**2. Feature Selection**: Uing the tests like chi square test results to select significant predictors based on their association with the target variable.
+
+
+This way by performing Feature selection reduces dimensionality, improves interpretability, and prevents overfitting, which is vital for generalizing to unseen data.
+
+
+
+### Statistical Learning Methods:
+
+Techniques like logistic regression or decision trees can be applied to predict the churn for telco customer data. These models are suitable for binary classification problems and can incorporate both numerical and categorical features.
+
+Where logistic regresion model can work as baseline model and easily interpretible and gives a good head start to work on complex and powefull models.
+
+
+
+
+
+
+
+
+
+
+**Q3: Based on the conditions assumed by the statistical learning methods, discuss their applicability to the prediction problem.** 
+
+Logistic regression or decision trees like random forest appear appropriate for this dataset also can handle both numerical and categorical data well.
+
+**1. Logistic Regression:**
+
+Assumes linear relationships between features and the target. Strong correlations or collinearity among predictors can degrade this models performance thats why careful feature selection is critical.
+
+
+**2. Tree-Based Models (e.g., Decision Trees, Random Forest)**:
+
+Do not require feature scaling or encoding but could perform better if data is encoded and feature selection to improve computational efficiency.
+
+Handles categorical variables natively and these tree models are robust to outliers.And if numerical data distributions are non linear or complex, tree-based methods may outperform linear approaches.
+
+
+
+Key Observation to look out for:
+
+- One hot encoding may lead to high dimensional data for categorical variables and needs to get addressed if required especially for logistic regression we can use of ridge or lasso regressions.
+
+
+
+
+
+
+## FEATURE ENGINEERING
+
+Lets do feature engineering for train, valid, test data.
+
+*ServiceCount*: Sum of binary service indicators like PhoneService, MultipleLines, etc.
+
+*Tenure*: Binning the tenure variable into categories.
+
+```{r}
+service_columns <- c("PhoneService", "MultipleLines", "InternetService", "OnlineSecurity", "OnlineBackup", "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies", "Contract", "PaperlessBilling", "PaymentMethod")
+
+# creating the new ServiceCount column by adding all binary columns
+train_data$ServiceCount <- rowSums(train_data[service_columns] == "Yes", na.rm = TRUE)
+
+
+# creating tenure_bin with bins as a new column based on tenure variable that we have
+train_data$tenure_bin <- cut(train_data$tenure, 
+                             breaks = c(0, 12, 24, 36, 48, 60, Inf), 
+                             labels = c("0-1 year", "1-2 years", "2-3 years", "3-4 years", "4-5 years", "5+ years"),
+                             right = FALSE)
+
+#head(train_data,3)
+
+
+
+# VALIDATION DATA
+
+valid_data$ServiceCount <- rowSums(valid_data[service_columns] == "Yes", na.rm = TRUE)
+
+valid_data$tenure_bin <- cut(valid_data$tenure, 
+                             breaks = c(0, 12, 24, 36, 48, 60, Inf), 
+                             labels = c("0-1 year", "1-2 years", "2-3 years", "3-4 years", "4-5 years", "5+ years"),
+                             right = FALSE)
+
+
+#head(valid_data,3)
+
+
+
+# TEST DATA
+
+test_data$ServiceCount <- rowSums(test_data[service_columns] == "Yes", na.rm = TRUE)
+
+test_data$tenure_bin <- cut(test_data$tenure, 
+                             breaks = c(0, 12, 24, 36, 48, 60, Inf), 
+                             labels = c("0-1 year", "1-2 years", "2-3 years", "3-4 years", "4-5 years", "5+ years"),
+                             right = FALSE)
+
+
+#head(test_data,3)
+
+```
+
+
+
+
+## ANALYZE NUMERICAL FEATURES
+
+
+```{r}
+numerical_variables <- sapply(train_data, is.numeric)
+numerical_data <- train_data[, numerical_variables]
+```
+
+
+## HISTOGRAMS
+
+```{r}
+plot1 <- ggplot(numerical_data, aes(x = .data$tenure)) + 
+    geom_histogram(binwidth = 5, fill = "skyblue", alpha = 0.7) + 
+    labs(title = paste("Histogram of tenure"), x = "tenure", y = "Frequency") +
+    theme_minimal()
+
+plot2 <- ggplot(numerical_data, aes(x = .data$MonthlyCharges)) + 
+    geom_histogram(binwidth = 5, fill = "skyblue", alpha = 0.7) + 
+    labs(title = paste("Histogram of MonthlyCharges"), x = "MonthlyCharges", y = "Frequency") +
+    theme_minimal()
+
+plot3 <- ggplot(numerical_data, aes(x = .data$TotalCharges)) + 
+    geom_histogram(binwidth = 5, fill = "skyblue", alpha = 0.7) + 
+    labs(title = paste("Histogram of TotalCharges"), x = "TotalCharges", y = "Frequency") +
+    theme_minimal()
+
+combined_plot <- plot_grid(plot1, plot2, plot3, ncol = 2)
+
+combined_plot
+```
+
+### INTERPRETATION:
+
+**Tenure**: Peak areas indicate most common tenure lengths and ranges Concentration of customers in specific tenure are close extremes.
+
+**MontlyCharges**: Reveals spread of monthly billing amounts and most common price points are from 75-100f monthly charges.
+
+**TotalCharges**: shoes cumulative charges over customer lifetime and reveals potential high value vs low value customer segments where high value customer seems to be very low compared to low totalcharges people.
+
+
+
+
+
+## BOXPLOTS
+
+```{r}
+plot1 <- ggplot(numerical_data,aes(y= .data$tenure))+
+  geom_boxplot(fill="orange", alpha=0.6)+
+  labs(title = "Box plot of Tenure") +
+  theme_minimal()
+
+plot2 <- ggplot(numerical_data,aes(y=.data$MonthlyCharges))+
+  geom_boxplot(fill="orange", alpha=0.6)+
+  labs(title = "Box plot of MontlyCharges") +
+  theme_minimal()
+
+plot3 <- ggplot(numerical_data,aes(y=.data$TotalCharges))+
+  geom_boxplot(fill="orange", alpha=0.6)+
+  labs(title = "Box plot of TotalCharges") +
+  theme_minimal()
+
+combined_plot <- plot_grid(plot1, plot2, plot3, ncol = 2)
+
+combined_plot
+```
+
+### INTERPRETATION:
+
+The *Tenure* and *MonthlyCharges* have close to evenly distribution but *totalcharges* distribution tells that most of the data is concentrated to lower end and we see in above histogram people paying high amounts are less.
+
+```{r}
+#Checking the skewness to see the how the distribution looks like
+skewness_results <- sapply(numerical_data, skewness)
+skewness_results
+```
+
+
+### INTERPRETATION:
+
+***Skewness in data distribution becomes a potential problem when its goes beyond absolute value one.***
+
+**tenure**: 0.2570418, slightly positive skewed but acceptable.
+
+**ServiceCount**: 0.3185407, slightly positive skewed but acceptable.
+
+**MonthlyCharges**: -0.2244766, slightly negative skewed but acceptable.
+
+**TotalCharges**: 0.9667273, Positively skewed and very close to 1, and has the highest skewness among the four and it has tendency towards lower values with a longer tail on the right side of the distribution. and needs to get addressed.
+
+
+
+
+
+
+
+## OUTLIERS DETECTION USING IQR 
+
+
+Inter Quartile Range method is chosen as it is less sensitive to skewness because it focuses on the spread of the middle 50% of the data and doesn't rely on the mean or standard deviation, which are sensitive to outliers.
+
+### IQR METHOD
+```{r}
+for (variable in colnames(numerical_data)) {
+  Q1 <- quantile(numerical_data[[variable]], 0.25, na.rm = TRUE)
+  Q3 <- quantile(numerical_data[[variable]], 0.75, na.rm = TRUE)
+  IQR <- Q3 - Q1
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  
+  outliers <- which(numerical_data[[variable]] < lower_bound | numerical_data[[variable]] > upper_bound)
+  
+  if (length(outliers) > 0) {
+    cat(paste("Outliers detected in", variable, ":", length(outliers), "\n"))
+  }
+}
+
+outliers
+
+```
+Interestingly we do not found any outlier through IQR method.
+
+
+
+
+
+## LETS PLOT BOX PLOT CONDITIONING WITH TARGET VARIABLE
+
+```{r}
+# Box plot for tenure by Churn
+plot1 <- ggplot(train_data, aes(x = Churn, y = tenure, fill = Churn)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Box plot of Tenure by Churn Status", x = "Churn Status", y = "Tenure (Months)") +
+  theme(legend.position = "none")
+
+# Box plot for MonthlyCharges by Churn
+plot2 <- ggplot(train_data, aes(x = Churn, y = MonthlyCharges, fill = Churn)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Box plot of Monthly Charges by Churn Status", x = "Churn Status", y = "Monthly Charges") +
+  theme(legend.position = "none")
+
+# Box plot for TotalCharges by Churn
+plot3 <- ggplot(train_data, aes(x = Churn, y = TotalCharges, fill = Churn)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Box plot of Total Charges by Churn Status", x = "Churn Status", y = "Total Charges") +
+  theme(legend.position = "none")
+
+
+combined_plot <- plot_grid(plot1, plot2, plot3, ncol = 2)
+
+combined_plot
+
+#summary(train_data$TotalCharges)
+```
+
+
+Suprisingly we found outliers for **TotalCharges** varible when conditionnig with **target** variable, The discrepancy might have arised because earlir we looped through entire dataset without conditioning on Churn target varible to calculate outliers. But When we filtered by Churn = Yes in the box plot, the distribution of TotalCharges caught new outliers specific to this subset.
+
+
+
+## ADDRESSING OUTLIERS USING LOG TRANSFORMATIONS FOR TRAIN, VALID, TEST DATA
+
+```{r}
+
+# TRAIN DATA
+# Applying the log1p transformation on TotalCharges variable for train, valid, test data
+train_data$TotalCharges <- log1p(train_data$TotalCharges)
+
+#summary(train_data$TotalCharges)
+
+
+# VALID DATA
+
+valid_data$TotalCharges <- log1p(valid_data$TotalCharges)
+
+# summary(tidy_df$LogTotalCharges)
+
+
+# TEST DATA
+
+test_data$TotalCharges <- log1p(test_data$TotalCharges)
+
+# summary(tidy_df$LogTotalCharges)
+
+```
+
+
+
+
+
+Handling the outliers or skewness ensures more accurate insights into feature/variable relationships and this helps correlation matrix will represent the relationships in the cleaned and processed data, which is closer to the data the model will use.
+
+## HEATMAP OF CORRELATIONS
+```{r}
+cor_matrix <- cor(numerical_data)
+
+# The heatmap of correlations
+corrplot(cor_matrix, method = "color")
+```
+
+
+## NUMERICAL DATA PAIRWISE PLOT
+```{r}
+cor_matrix <- cor(numerical_data, use = "complete.obs")
+cor_matrix
+
+pairs(numerical_data)
+
+```
+
+
+
+### INTERPRETATION:
+
+
+**TotalCharges and tenure**: 0.828 (Strong positive correlation)
+
+- This high correlation is expected because TotalCharges accumulates over time (tenure). Therefore including both variables (tenure and TotalCharges) may lead to multicollinearity.
+
+**MonthlyCharges and ServiceCount**: 0.827 (Strong positive correlation)
+
+- This makes sense as customers with more services (ServiceCount) are likely to have higher MonthlyCharges. This relationship looks redundant and including both may not be significant.
+
+**TotalCharges and MonthlyCharges**: 0.649 (Moderate positive correlation)
+
+- TotalCharges depends partly on MonthlyCharges and tenure. However, TotalCharges  has like cumulative effect.
+
+**ServiceCount and TotalCharges**: 0.772 (Strong positive correlation)
+
+- Customers with higher ServiceCount likely will have higher TotalCharges, and possible of having litte redundancy/overlap information.
+
+
+
+**Where:**
+
+- *tenure:* loyalty and duration.
+
+- *MonthlyCharges*: short term financial bills.
+
+- *ServiceCount*: customer engagement in broad range of services.
+
+
+
+
+## FEATURE SELECTION:
+
+Hence decided to drop **servicecount** and **totalcharges** varible because of high collinearlity and we can also remove **customerID** as it doesnt have anyting to do with churnn prediction. This balance minimizes multicollinearity while retaining meaningful predictive features.
+
+
+
+
+
+
+
+
+## CATEGORICAL ANALYSIS
+
+
+```{r}
+categorical_variables <- sapply(train_data, is.factor)
+categorical_data <- train_data[, categorical_variables]
+
+# The subsets 1, 2, and 3 combined equals categorical data; 
+# just for the convenience of displaying plots, the categorical data is split like this:
+
+columns_subset1 <- c("gender", "Partner", "Dependents", "PhoneService", "MultipleLines", "InternetService")
+
+columns_subset2 <- c("OnlineSecurity", "OnlineBackup", "DeviceProtection", "TechSupport", "StreamingTV")
+
+columns_subset3 <- c("StreamingMovies", "Contract", "PaperlessBilling", "PaymentMethod", "Churn", "SeniorCitizen")
+
+# Create the subsets using column indexing
+categorical_data_1 <- categorical_data[, columns_subset1]
+categorical_data_2 <- categorical_data[, columns_subset2]
+categorical_data_3 <- categorical_data[, columns_subset3]
+
+```
+
+
+## BAR CHARTS
+
+
+```{r}
+#Using grid.arrange for categorical varibles to plot many plots in a single window 
+# Create all bar plots and store them in a list
+plot_list <- lapply(colnames(categorical_data_1), function(variable) {
+  ggplot(categorical_data_1, aes(x = .data[[variable]], fill = .data[[variable]])) +
+    geom_bar(color = "black") +
+    labs(title = paste("Bar Chart of", variable), x = variable, y = "Count") +
+    theme_minimal()
+})
+
+# Combine the plots into a grid layout
+grid.arrange(grobs = plot_list, ncol = 2) # Adjust ncol for number of columns
+
+
+# Create all bar plots and store them in a list
+plot_list <- lapply(colnames(categorical_data_2), function(variable) {
+  ggplot(categorical_data_2, aes(x = .data[[variable]], fill = .data[[variable]])) +
+    geom_bar(color = "black") +
+    labs(title = paste("Bar Chart of", variable), x = variable, y = "Count") +
+    theme_minimal()
+})
+
+# Combine the plots into a grid layout
+grid.arrange(grobs = plot_list, ncol = 2) # Adjust ncol for number of columns
+
+
+# Create all bar plots and store them in a list
+plot_list <- lapply(colnames(categorical_data_3), function(variable) {
+  ggplot(categorical_data_3, aes(x = .data[[variable]], fill = .data[[variable]])) +
+    geom_bar(color = "black") +
+    labs(title = paste("Bar Chart of", variable), x = variable, y = "Count") +
+    theme_minimal()
+})
+
+# Combine the plots into a grid layout
+grid.arrange(grobs = plot_list, ncol = 2) # Adjust ncol for number of columns
+```
+
+### INTERPRETATION:
+
+- People count having Phonservices, Dependents are more compared to not.
+
+- The gender and partner count looks almost similar for both possbile classes.
+
+- People mostly opt for montly charges.
+
+- Very less seniorcitizen count, very less churn.
+
+- People in this dataset represent has low importance on  device protection, techsupport, online backup and online security.
+
+
+
+## BAR CHARTS WITH TARGET CHURN
+
+
+```{r}
+#fill="Churn" is added to the code so that the legened doesnt have weird name as categorical_data$churn over it
+# Create all bar plots and store them in a list
+plot_list <- lapply(colnames(categorical_data_1), function(variable) {
+  ggplot(categorical_data_1, aes(x = .data[[variable]], fill = categorical_data$Churn)) + # Fill by Churn
+    geom_bar(position = "fill") +
+    labs(title = paste("Churn by", variable), x = variable, y = "Proportion", fill = "Churn") +
+    theme_minimal() +
+    scale_y_continuous(labels = scales::percent)
+})
+
+# Combine the plots into a grid layout
+grid.arrange(grobs = plot_list, ncol = 2) # Adjust ncol for number of columns
+
+
+# Create all bar plots and store them in a list
+plot_list <- lapply(colnames(categorical_data_2), function(variable) {
+  ggplot(categorical_data_2, aes(x = .data[[variable]], fill = categorical_data$Churn)) + # Fill by Churn
+    geom_bar(position = "fill") +
+    labs(title = paste("Churn by", variable), x = variable, y = "Proportion", fill = "Churn") +
+    theme_minimal() +
+    scale_y_continuous(labels = scales::percent)
+})
+
+# Combine the plots into a grid layout
+grid.arrange(grobs = plot_list, ncol = 2) # Adjust ncol for number of columns
+
+
+# Create all bar plots and store them in a list
+plot_list <- lapply(colnames(categorical_data_3), function(variable) {
+  ggplot(categorical_data_3, aes(x = .data[[variable]], fill = Churn)) + # Fill by Churn
+    geom_bar(position = "fill") +
+    labs(title = paste("Churn by", variable), x = variable, y = "Proportion") +
+    theme_minimal() +
+    scale_y_continuous(labels = scales::percent)
+})
+
+# Combine the plots into a grid layout
+grid.arrange(grobs = plot_list, ncol = 2) # Adjust ncol for number of columns
+
+```
+
+### INTERPRETATION:
+
+- People who has fibre optic as internet serive opt out of service (churn) more than rest two. 
+
+- People churns more from the category of having no online security, online backup, techsupport, device protection.
+
+- People churns more who has electronic check payment method than the rest.
+
+- senior citizens opt to get out of service more, also monthly contract bills paying people churn more than the rest.
+
+## CROSS TABULATION AND CHI SQUARE TEST 
+
+Chi Square test to determine if there is a statistically significant association between two categorical variables and also between various categorical features and Churn like whether the customer has churned or not.
+```{r}
+# Perform a chi-square test for independence between categorical features and churn
+# Loop through each categorical feature
+for (feature in colnames(categorical_data)) {
+  if (feature != "Churn") {
+    # Cross tabulation
+    cross_tab <- table(categorical_data[[feature]], categorical_data$Churn)
+
+    # Chi-square test
+    chi_sq_test <- chisq.test(cross_tab)
+    
+    # Check if p-value is greater than 0.05 (insignificant)
+    if (chi_sq_test$p.value > 0.05) {
+      cat(paste("Insignificant Feature:", feature, " ->p value:", round(chi_sq_test$p.value, 4), "\n"))
+    }
+  }
+}
+
+```
+
+
+
+### INTERPRERATION: 
+
+
+
+**Variables with p value < 0.05 (significant association with Churn) are**:
+
+- All the variables includes SeniorCitizen, Partner, Dependents, MultipleLines, InternetService, OnlineSecurity, OnlineBackup, DeviceProtection, TechSupport, StreamingTV, StreamingMovies, Contract, PaperlessBilling, PaymentMethod, tenure_bin have a significant relationship with customer churn, and these likely contribute to predicting churn.
+
+**Variables with p-value > 0.05 (no significant association with Churn) are**:
+
+- ***gender***: p value = 0.1233 (no significant association).
+
+- ***PhoneService***: p value = 0.2488 (no significant association).
+
+These above variables does not show a significant relationship with churn and thats why not useful for predicting churn and could be dropped.
+
+
+
+**Where:**
+
+- **Null Hypothesis H0**: No association between two variables(i.e.independent).
+Alternative Hypothesis H1: There is some association/relation between the two variables (i.e dependent).
+
+
+- **p-value < 0.05**: Strong evidence against null hypothesis and can reject null hypothesis and conclude that there is a statistically significant association.
+
+- **p-value > 0.05**: Weak evidence against null hypothesis and fail to reject null hypothesis and conclude that there is no significant association.
+
+
+
+
+
+## FEATURE SELECTION
+
+Selecting only certain features to avoid multicollinearity and avoiding potential overfitting and reducing complexity for the models. Therefore in total from categorical and numerical features/variables the variables that can be dropped are:
+**totalcharges** , **servicecount**, **customerID**, **gender**, **phoneserivce**.
+
+```{r}
+
+train_data <- train_data[, !(names(train_data) %in% c("TotalCharges", "ServiceCount", "customerID", "gender", "PhoneService"))]
+
+valid_data <- valid_data[, !(names(valid_data) %in% c("TotalCharges", "ServiceCount", "customerID", "gender", "PhoneService"))]
+
+test_data <- test_data[, !(names(test_data) %in% c("TotalCharges", "ServiceCount", "customerID", "gender", "PhoneService"))]
+```
+
+
+
+## ONE HOT ENCODING
+
+Before performing encoding we must have to exclude the target Variable (Churn) from Encoding.
+
+
+The purpose of dummy encoding is to convert categorical features to numerical format way and can be fed to  machine learning models. And only the inpupt variables not target variable because is is dependent variable that can be used to predict.
+
+Also encoding target variable along with features leads to data leakage and the machine learnig models might learn patterns from target variable during training and eventually resulting in overfitting or misleading results.
+
+```{r}
+# excluding target variable Churn
+categorical_columns <- setdiff(names(train_data)[sapply(train_data, is.factor)], "Churn")
+
+#creating dummy variable model for the categorical variables only
+dummies <- dummyVars( ~ ., data = train_data[, categorical_columns], fullRank = TRUE)
+
+# applying dummy variable model to categorical data
+encoded_data <- predict(dummies, newdata = train_data[, categorical_columns])
+
+# converting the encoded data to a data frame
+encoded_data <- data.frame(encoded_data)
+
+# Now lets combine encoded data with the original non categorical variables 
+final_train_data <- cbind(train_data[, !names(train_data) %in% categorical_columns], encoded_data)
+
+# Adding the target variable back to final dataset
+final_train_data$Churn <- train_data$Churn
+
+# View the transformed dataset
+#head(final_train_data, 3)
+
+
+
+
+
+
+
+
+# VALID DATA
+dummies <- dummyVars( ~ ., data = valid_data[, categorical_columns], fullRank = TRUE)
+
+encoded_data <- predict(dummies, newdata = valid_data[, categorical_columns])
+
+encoded_data <- data.frame(encoded_data)
+
+final_valid_data <- cbind(valid_data[, !names(valid_data) %in% categorical_columns], encoded_data)
+
+final_valid_data$Churn <- valid_data$Churn
+
+#head(final_valid_data, 3)
+
+
+
+
+
+
+
+# TEST  DATA
+dummies <- dummyVars( ~ ., data = test_data[, categorical_columns], fullRank = TRUE)
+
+encoded_data <- predict(dummies, newdata = test_data[, categorical_columns])
+
+encoded_data <- data.frame(encoded_data)
+
+final_test_data <- cbind(test_data[, !names(test_data) %in% categorical_columns], encoded_data)
+
+final_test_data$Churn <- test_data$Churn
+
+#head(final_test_data, 3)
+
+
+
+```
+
+
+
+## DROPPING THE VARIABLES WITH LOW VARIANCE AND HIGHLY CORRELATED AFTER ENCODING
+```{r}
+# TRAIN DATA
+
+# Checking for near-zero variance features and remove them
+nzv <- nearZeroVar(final_train_data, saveMetrics = TRUE)
+any(nzv$nzv)
+which(nzv$nzv)
+
+
+# Checking for highly correlated features (correlation > 0.9) and remove one from each pair
+cor_matrix <- cor(final_train_data[, sapply(final_train_data, is.numeric)])
+high_cor <- findCorrelation(cor_matrix, cutoff = 0.9)  # Correlation threshold
+final_train_data <- final_train_data[, -high_cor]
+
+
+
+# VALID DATA
+
+# Checking for near zero variance features and remove them
+nzv <- nearZeroVar(final_valid_data, saveMetrics = TRUE)
+any(nzv$nzv)
+which(nzv$nzv)
+
+
+cor_matrix <- cor(final_valid_data[, sapply(final_valid_data, is.numeric)])
+high_cor <- findCorrelation(cor_matrix, cutoff = 0.9) 
+final_valid_data <- final_valid_data[, -high_cor]
+
+
+
+# TEST DATA
+
+
+# Checking for near zero variance features and remove them
+nzv <- nearZeroVar(final_test_data, saveMetrics = TRUE)
+any(nzv$nzv)
+which(nzv$nzv)
+
+
+cor_matrix <- cor(final_test_data[, sapply(final_test_data, is.numeric)])
+high_cor <- findCorrelation(cor_matrix, cutoff = 0.9) 
+final_test_data <- final_test_data[, -high_cor]
+
+
+
+
+train_data <- final_train_data
+
+valid_data <- final_valid_data
+  
+test_data <- final_test_data
+```
+
+
+
+
+
+
+
+
+
+# PREDICTIVE ANALYSIS AND RESULTS 
+
+
+
+**Q1: Apply and document the statistical learning procedure for the predictive analysis.**
+
+The dataset is preprocessed (missing value imputation, feature creation, encoding categorical variables). After preprocessing, models like logistic regression, decision trees, or others can be trained on the train_data. The exact choice of statistical learning method will depend on the subsequent modeling phase.
+
+**Q2: Estimate the performance of the statistical learning approaches on test data, using resampling methods or other measures.**
+
+Performance can be assessed using metrics like accuracy, precision, recall, F1-score, and ROC-AUC. The model performance is estimated using resampling methods like cross-validation or by directly evaluating the model on the test data.
+
+**Q3: Evaluate the performance on the test data.**
+
+Evaluation is done by comparing predicted values against actual "Churn" values in the test set. Cross-tabulation (confusion matrix) and accuracy metrics like F1 score, ROC - AUC, etc will help assess the model’s performance.
+
+**Q4: Discuss the results.**
+
+The results will include performance metrics that are discussed above and the interpretation of those metrics. Key insights might performance of the best model on variosu metrics and its consistency on validaton and test data and also including how well the model handles imbalance, and potential areas for improvement like tuning hyperparameters, improving feature selection and etc.
+
+
+
+
+## LOGISTIC REGRESSION MODEL
+```{r,message=FALSE,warning=FALSE}
+
+set.seed(123)  
+# Logistic Regression with 10-fold cross-validation
+log_control <- trainControl(method = "cv", number = 10, summaryFunction = twoClassSummary, classProbs = TRUE)
+log_model <- train(Churn ~ ., data = train_data, method = "glm", family = "binomial", trControl = log_control, metric = "ROC")
+
+
+# Model Training
+log_model_final <- glm(Churn ~ ., data = train_data, family = "binomial")
+
+
+
+#Model Evaluation Validation Data
+log_pred_val <- predict(log_model_final, valid_data, type = "response")
+log_pred_class <- ifelse(log_pred_val > 0.5, "Yes", "No")
+
+# lapply(log_pred_class, levels)
+
+# Convert Churn in validation data and predicted classes to factors
+valid_data$Churn <- factor(valid_data$Churn, levels = c("No", "Yes"))
+log_pred_class <- factor(log_pred_class, levels = c("No", "Yes"))
+
+log_cm <- confusionMatrix(log_pred_class, valid_data$Churn)
+
+
+
+# Calculating the metrics, Precision, Recall, F1-Score, and ROC-AUC for Logistic Regression
+# and extract Precision, Recall, and F1-Score from confusionMatrix
+log_precision <- log_cm$byClass["Pos Pred Value"]  # Precision
+log_recall <- log_cm$byClass["Sensitivity"]        # Recall
+log_f1 <- log_cm$byClass["F1"]                    
+log_roc <- roc(valid_data$Churn, as.numeric(log_pred_val))  # Ensure Churn is numeric for ROC
+
+
+log_precision 
+log_recall
+log_f1                  
+log_roc
+
+```
+
+
+
+# RANDOM FOREST MODEL
+```{r,message=FALSE, warning=FALSE}
+set.seed(123)
+
+# Random Forest with 10 fold cross-validation (default model, no hyperparameter tuning)
+rf_control <- trainControl(method = "cv", number = 10, summaryFunction = twoClassSummary, classProbs = TRUE)
+rf_model <- train(Churn ~ ., data = train_data, method = "rf", trControl = rf_control, metric = "ROC")
+
+# MODEL EVALUATION
+
+# Evaluating Random Forest on Validation Data
+rf_pred_val <- predict(rf_model, valid_data)
+rf_cm <- confusionMatrix(rf_pred_val, valid_data$Churn)
+
+# Calculating the metrics like Precision, Recall, F1-Score, and ROC-AUC for Random Forest
+# Extract Precision, Recall, and F1-Score from confusionMatrix for Random Forest
+rf_precision <- rf_cm$byClass["Pos Pred Value"]  # Precision
+rf_recall <- rf_cm$byClass["Sensitivity"]        # Recall
+rf_f1 <- rf_cm$byClass["F1"]                     # F1-Score
+
+# Calculate ROC AUC
+rf_roc <- roc(valid_data$Churn, as.numeric(rf_pred_val))  # Ensure Churn is numeric for ROC
+
+# Output the results
+rf_precision
+rf_recall
+rf_f1
+rf_roc
+```
+```{r}
+rf_importance <- varImp(rf_model, scale = TRUE)
+
+# rf_importance
+
+plot(rf_importance, top = 10)  # Adjust 'top' to display the desired number of features
+```
+
+**The model is overly reliant on tenure variable**
+
+# RANDOM FOREST MODEL WITH FINE TUNING 
+```{r,message=FALSE,warning=FALSE}
+set.seed(123)
+
+# grid for tuning nodesize and maxnodes as part of hyperparameter tuning
+tune_grid <- expand.grid(
+  mtry = c(2, 3, 4, 5, 6, 7),  
+  nodesize = c(1, 5, 10),  
+  maxnodes = c(10, 20, 30)  
+)
+
+# 10 fold cross validation
+rf_control <- trainControl(method = "cv", number = 10, summaryFunction = twoClassSummary, classProbs = TRUE)
+
+# Fine tuned Random Forest and tuning hyperparameters
+fine_tuned_rf_model <- function(train_data, valid_data, tune_grid) {
+  # Store results of each grid search
+  fine_tuned_rf_results <- list()
+
+  # iterating through each combination of mtry, nodesize, and maxnodes
+  for (i in 1:nrow(tune_grid)) {
+    # Extract current combination of parameters
+    params <- tune_grid[i, ]
+    
+    # Fitting fine tuned Random Forest model with current parameters
+    fine_tuned_rf <- randomForest(
+      Churn ~ ., 
+      data = train_data, 
+      mtry = params$mtry,
+      nodesize = params$nodesize,
+      maxnodes = params$maxnodes,
+      importance = TRUE
+    )
+    
+    # Predictions on validation data
+    fine_tuned_rf_pred_val <- predict(fine_tuned_rf, valid_data)
+    
+    # Computing the confusion matrix
+    fine_tuned_rf_cm <- confusionMatrix(fine_tuned_rf_pred_val, valid_data$Churn)
+    
+    # Extracting Precision, Recall, F1-Score, and ROC-AUC
+    fine_tuned_rf_precision <- fine_tuned_rf_cm$byClass["Pos Pred Value"]
+    fine_tuned_rf_recall <- fine_tuned_rf_cm$byClass["Sensitivity"]
+    fine_tuned_rf_f1 <- fine_tuned_rf_cm$byClass["F1"]
+    fine_tuned_rf_roc <- roc(valid_data$Churn, as.numeric(fine_tuned_rf_pred_val))
+    
+    # Saving result in the form of data frame
+    fine_tuned_rf_results[[i]] <- data.frame(
+      mtry = params$mtry,
+      nodesize = params$nodesize,
+      maxnodes = params$maxnodes,
+      precision = fine_tuned_rf_precision,
+      recall = fine_tuned_rf_recall,
+      f1 = fine_tuned_rf_f1,
+      roc_auc = auc(fine_tuned_rf_roc)
+    )
+  }
+  
+  # Combining all into one data frame
+  fine_tuned_rf_results_df <- do.call(rbind, fine_tuned_rf_results)
+  
+  return(fine_tuned_rf_results_df)
+}
+
+# fine tuned Random Forest tuning on the train and validation data
+fine_tuned_rf_results_df <- fine_tuned_rf_model(train_data, valid_data, tune_grid)
+
+
+#print(fine_tuned_rf_results_df)
+
+# Fetcing  the best model based on ROC AUC
+best_fine_tuned_rf_model <- fine_tuned_rf_results_df[which.max(fine_tuned_rf_results_df$roc_auc), ]
+print("Best Fine-Tuned Random Forest Model Parameters:")
+print(best_fine_tuned_rf_model)
+
+```
+
+
+# XGBOOST MODEL
+```{r}
+set.seed(123)
+
+# Converting Churn  column  target variabe to numeric (0 = No, 1 = Yes)
+train_data$Churn <- ifelse(train_data$Churn == "Yes", 1, 0)
+valid_data$Churn <- ifelse(valid_data$Churn == "Yes", 1, 0)
+
+
+# Extracting features X and target y
+X_train <- as.matrix(train_data[, -which(names(train_data) == "Churn")])  # Remove target variable
+y_train <- train_data$Churn
+
+X_valid <- as.matrix(valid_data[, -which(names(valid_data) == "Churn")])  # Remove target variable
+y_valid <- valid_data$Churn
+
+
+# 10 Fold Cross Validation using internal cv not from exteernal library
+xgb_cv_results <- xgb.cv(
+  data = X_train,
+  label = y_train,
+  nfold = 10,                     # Number of folds
+  nrounds = 1000,                 # Number of boosting rounds
+  objective = "binary:logistic",  # Binary classification
+  eval_metric = "logloss",        # Evaluation metric
+  max_depth = 6,                  # Maximum depth of trees
+  eta = 0.01,                     # Learning rate
+  gamma = 0,                      # Minimum loss reduction
+  colsample_bytree = 0.8,         # Fraction of columns sampled per tree
+  subsample = 0.8,                # Fraction of rows sampled
+  scale_pos_weight = 3,           # Class imbalance adjustment
+  verbose = 0                     # Suppress verbose output
+)
+
+
+# Train XGBoost Model
+xgb_model <- xgboost(
+  data = X_train, 
+  label = y_train, 
+  nrounds = 1000,                  # Number of boosting rounds
+  objective = "binary:logistic",   # Binary classification (churn / not churn)
+  eval_metric = "logloss",         # Evaluation metric (logloss)
+  max_depth = 6,                   # Maximum depth of each tree
+  eta = 0.01,                      # Learning rate
+  gamma = 0,                       # Minimum loss reduction required to make a further partition
+  colsample_bytree = 0.8,          # Fraction of columns to sample per tree
+  subsample = 0.8,                 # Fraction of rows to sample
+  scale_pos_weight = 3,            # Class imbalance handling 
+  verbose = 0                      # to suppress output
+)
+
+# Model Evaluation on Validation Data
+xgb_pred_val <- predict(xgb_model, X_valid)
+xgb_pred_class_val <- ifelse(xgb_pred_val > 0.5, 1, 0)  # Convert to binary class (1 = churn, 0 = no churn)
+
+# Confusion Matrix
+xgb_cm_val <- confusionMatrix(as.factor(xgb_pred_class_val), as.factor(y_valid))
+print(xgb_cm_val)
+
+# Precision, Recall, F1-Score, and ROC AUC for Validation Data
+xgb_precision_val <- xgb_cm_val$byClass["Pos Pred Value"]
+xgb_recall_val <- xgb_cm_val$byClass["Sensitivity"]
+xgb_f1_val <- xgb_cm_val$byClass["F1"]
+xgb_roc_val <- roc(y_valid, xgb_pred_val)  # ROC-AUC
+
+print(xgb_precision_val)
+print(xgb_recall_val)
+print(xgb_f1_val)
+print(paste("ROC-AUC: ", auc(xgb_roc_val)))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## MODEL SELECTION
+
+
+```{r}
+# The logistic regression ROC-AUC is `r log_roc`
+# The random forest ROC-AUC is `r rf_roc`
+print("The logistic regression ROC AUC:0.8441")
+print("The random Forest ROC Auc: 0.6266")
+print(paste("fine tuned random forest ROC-AUC:",best_fine_tuned_rf_model$roc_auc))
+
+print(paste("xgboost model recall:",xgb_recall_val))
+
+print(paste(" xgBoost ROC-AUC: ", auc(xgb_roc_val)))
+
+```
+
+### LOGISTIC REGRESSION AS FINAL MODEL: 
+
+It has the highest ROC AUC (0.8441) and also has balanced performance with Good scores across precision, recall, F1-score, and ROC AUC. It achieves a high recall, meaning it effectively identifies churners.
+
+Its interpretability and simplicity make it easier to communicate the model's predictions and impact to stakeholders.
+
+Most consistent performance, Less complex model, Robust against overfitting, Good balance of precision and recall, Easy Interpretable, Performs well on imbalanced data.
+
+
+### RANDOM FOREST MODELS:
+
+These models are poorely performed compared to logistic regression and XGboost model.
+
+Default Random Forest: Low ROC AUC (0.6266) makes it unsuitable, despite its high recall value.
+
+Fine-Tuned Random Forest: Improved metrics but still low ROC AUC (0.6831), which is critical for evaluating the overall quality of predictions.
+
+
+### XGBoost:
+
+While XGBoost has high precision and strong ROC AUC (0.8391), its lower recall (0.7487) means it may miss actual churners, which is risky for a class imbalanced problem. Additionally, XGBoost's added complexity makes it less interpretable.
+
+
+***When simple model and complex model both have similar performances choosing the simple model is suggested so Logistic Regression Model is chosen for now***
+
+
+## FINAL TESTING
+
+LOGISTIC REGRESSION ON TEST DATA
+
+```{r}
+# Predictions on Test Data using Logistic Regression
+log_pred_test <- predict(log_model_final, test_data, type = "response")
+log_pred_class_test <- ifelse(log_pred_test > 0.5, "Yes", "No")
+
+# Converting Churn in test data and predicted classes to factors
+test_data$Churn <- factor(test_data$Churn, levels = c("No", "Yes"))
+log_pred_class_test <- factor(log_pred_class_test, levels = c("No", "Yes"))
+
+# Confusion Matrix
+log_cm_test <- confusionMatrix(log_pred_class_test, test_data$Churn)
+
+# Extract Precision, Recall, F1-Score, and ROC-AUC for Logistic Regression
+log_precision_test <- log_cm_test$byClass["Pos Pred Value"]  # Precision
+log_recall_test <- log_cm_test$byClass["Sensitivity"]        # Recall
+log_f1_test <- log_cm_test$byClass["F1"]                    
+log_roc_test <- roc(test_data$Churn, as.numeric(log_pred_test))  # ROC-AUC
+
+log_precision_test
+log_recall_test
+log_f1_test
+log_roc_test
+
+```
+
+On the test dataset the logistic regression maintained strong performance.Ensures most of the predicted churn cases are accurate, High sensitivity confirms effective identification of actual churners.
+
+High F1 score balance well between precision and recall. The good ROC AUC number indicates robust discriminative capability.
+
+These results validate the choice of logistic regression as a model that balances predictive accuracy, interpretability, and simplicity, making it highly effective for the churn prediction task.
+
+
+Therefore choosing logistic regression as the final model was a good decision for now. Its balanced performance on key metrics, ease of interpretation, robustness, and reliability on both validation and test datasets demonstrate that it is a practical and effective solution for predicting customer churn and consitently performed on validation and test data.
+
+
+
+
+# CONCLUSION: 
+
+
+**Q1: The scope and generalizability of the predictive analysis.**
+
+### SCOPE:
+
+This predictive analysis is focused on identifying churners of telecommunications domain but can be generalized to similar industries where customer churn dynamics are comparable like digtial media platforms like netflix, amazonPrime, ect like subscription based services.
+
+The resulted high recall ensures that most churners are identified and thereby performs better customer outreach campaigns.
+
+### GENERALIZABILITY:
+
+Logistic regression model’s simplicity and robustness reduce overfitting, making it potentially generalizable to other datasets with similar patterns of imbalance and categorical variables.
+
+Also maintains consistency in metrics across validation and test datasets so good reliability on unseen data.
+
+
+
+
+**Q2: Potential limitations and possibilities for improvement.**
+
+
+### LIMITATIONS:
+
+**Linear Assumption**:
+Logistic regression assumes the relation linearly which struggels badly while introduced to non linear data.
+
+**Data Imbalance:**
+
+- Logistic regression performed well with imbalanced data but has lower precision compared to recall so class imbalance could make bias predictions.
+
+- Categorical are encoded by one hot encoding, which may lead to higher dimensional data. And this approach might not fully capture complex relationships.
+
+- Potentially when required the important interactions between features might be underrepresented in a linear model like logistic regression.
+
+**Limited Model Complexity:**
+
+- Logistic regression assumes linear relationships between predictors and the target variable, which may not fully capture complex, non linear churn behaviors.
+
+- Ensemble models like Random Forest or XGBoost might excel in identifying such complexities, though they currently performed poor for this project.
+
+
+
+## POSSIBILITIES FOR IMPROVEMENTS
+
+
+**Advanced Feature Engineering:**
+
+- Incorporate feature interactions, polynomial terms might provide still more better performance for all the models.
+
+
+**Handling Class Imbalance**
+
+- Using advanced techniques like Synthetic Minority Oversampling Technique (SMOTE) to balance the classes further during training. OR using stratified K fold cross validation during training.
+
+**Better Fine Tuning**
+
+- Random Forest and XGBOOST might have better performed over logistic regression if they were perfectly tuned in an optimised way that could provide the best resulst out of it whcih requier keen observatin in depth knowledge on domain and much experience in fine tuning the models.
+
+- Which might include use of right number of mtry,nodes, weights and etc by perfectly fine tuning
+
+
+- By addressing these limitations and leveraging potential improvements, the predictive analysis can be extended and refined to offer even greater value  in predicting the churners in telecommunicaions domain and also across different contexts.
+
