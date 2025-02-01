@@ -1,4 +1,4 @@
-# Customer Churn Prediction Project
+# Telecommunications Customer Churn Prediction Project
 
 ## Overview
 
