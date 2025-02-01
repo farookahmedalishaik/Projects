@@ -1,141 +1,203 @@
 # Optimizing Resource Utilization on the Cori Supercomputer
 
-### Overview
+## Overview
 
-This project focuses on optimizing resource utilization for the Cori supercomputer at the National Energy Research Scientific Computing Center (NERSC). By leveraging advanced computational methods and machine learning models, the project aims to uncover patterns in resource usage, predict future power consumption, and develop strategies to improve efficiency.
+This project analyzes resource utilization patterns on the NERSC Cori supercomputer, focusing on optimizing computational efficiency through advanced data analysis and machine learning techniques. The analysis encompasses workload patterns, power consumption prediction, and resource optimization strategies.
 
-### Research Questions
+---
 
-1.**Descriptive Analysis:** How does the computational workload vary throughout the week?
+## Dataset Description
 
-2.**Predictive Modeling:** What is the optimal model for forecasting power usage?
+* **Size:** 4,401 observations across 14 features  
+* **Time Period:** One week of operations in 2020
 
-3.**Correlation Analysis:** What are the relationships between power consumption, memory usage, and other variables?
+### Key Variables
 
-4.**Strategy Development:** How can resource utilization be optimized for different types of applications?
+* **Categorical:** `exename`, `appname`
+* **Temporal:** `start`, `end`
+* **Numerical:** `jobid`, `numnodes`, `numcpus`, `numtasks`, `executiontime`, `power`, `memory`, `taskspercpu`, `taskspernode`, `user`
 
-5.**Identification of Improvement Areas:** What are the high-resource utilization periods, and how can they be addressed?
+---
 
-### Dataset
+## Technical Implementation
 
-The dataset contains **4,401 observations** and **14 features**, including:
+* **Primary Language:** R (version 4.3.3)
 
-* **Categorical Variables:** exename, appname
+### Key Libraries
 
-* **Datetime Variables:** start, end
+* **Data Processing:** `tidyverse`, `lubridate`
+* **Visualization:** `ggplot2`, `plotly`, `corrplot`, `cowplot`
+* **Machine Learning:** `caret`, `randomForest`
+* **Metrics:** `Metrics`, `broom`
+* **Statistical Analysis:** `rsample`
 
-* **Numerical Variables:** jobid, numnodes, numcpus, numtasks, executiontime, power, memory, taskspercpu, taskspernode, user
+---
 
-Data source: Jobs executed on the Cori supercomputer during one week in 2020.
+## Data Preparation Methodology
 
-### Technologies Used
+### Data Cleaning
 
-* **Programming Language:** R
+* Handling missing values through NA omission  
+* Converting categorical variables (`exename`, `appname`) to factors  
+* Normalizing data types across variables  
+* Validating data consistency and integrity
 
-* **Libraries:**
+### Feature Engineering
 
-  * Data manipulation: tidyverse, lubridate
+* Created temporal features (`hour`, `day_of_week`) from timestamps  
+* Developed utilization metrics (`cpu_utilization`, `memory_utilization`)  
+* Normalized execution times and resource usage metrics
 
-  * Data visualization: ggplot2, plotly, corrplot
+### Data Splitting
 
-  * Modeling: caret, randomForest
+* **Training set:** 60% (2,640 observations)  
+* **Validation set:** 20% (880 observations)  
+* **Test set:** 20% (881 observations)
 
-  * Metrics evaluation: Metrics, broom
+---
 
-### Methods
+## Analysis Components
 
-**Data Preparation**
+### 1. Workload Pattern Analysis
 
-  * Handled missing values and outliers.
+#### Temporal Analysis
 
-  * Converted data types and metrics for consistency.
+* Created daily execution time aggregations  
+* Generated hourly utilization heatmaps  
+* Identified peak usage periods (6 AM - 7 PM weekdays)
 
-  * Performed exploratory data analysis (EDA) to visualize trends.
+#### Key Findings
 
-**Analysis Techniques**
+* Higher computational loads during weekdays  
+* Consistent weekly patterns in resource utilization  
+* Clear business hour peaks in system usage
 
-1.**Descriptive Statistics:** Visualized execution time trends using bar charts and heatmaps.
+### 2. Application Resource Impact Analysis
 
-2.**Predictive Modeling:**
+#### Resource Metrics
 
-  * **Linear Regression:** Basic predictive modeling.
+* **Average Execution Time per Application**  
+* **Power Consumption Patterns**  
+* **Memory Utilization Trends**  
+* **Computational Load Distribution**
 
-  * **Polynomial Regression:** Improved non-linear relationships.
+#### High-Resource Applications Identified
 
-  * **Random Forest Regression:** Captured complex interactions with the best accuracy.
+* **Power Consumption:** `chroma`, `gene`, `qlua`, `vasp`, `su3`  
+* **Execution Time:** `chroma`, `gene`, `qlua`, `vasp`  
+* **Memory Usage:** `chroma`, `qlua`, `vasp`, `wrf`  
+* **Computational Load:** `chroma`, `qlua`, `vasp`, `cmip5`, `e3sm`
 
-3.**Correlation Analysis:** Identified relationships using heatmaps and correlation matrices.
+### 3. Predictive Modeling for Power Usage
 
-4.**Strategy Development:** Proposed optimization methods based on application-level insights.
+#### Linear Regression Model
 
-### Evaluation Metrics
+* **Mean Cross-Validated RMSE:** 35.56  
+* **MSE:** 1,207.90  
+* **RMSE:** 34.75  
+* **MAE:** 28.44
 
-  * Cross-Validation (CV)
+#### Polynomial Regression Model
 
-  * Root Mean Squared Error (RMSE)
+* **Mean Cross-Validated RMSE:** 32.84  
+* **MSE:** 988.49  
+* **RMSE:** 31.44  
+* **MAE:** 24.29
 
-  * Mean Squared Error (MSE)
+#### Random Forest Model (Best Performing)
 
-  * Mean Absolute Error (MAE)
+* **Mean Cross-Validated RMSE:** 11.82  
+* **MSE:** 140.66  
+* **RMSE:** 11.86  
+* **MAE:** 6.67
 
-### Results
+### 4. Correlation Analysis
 
-**Key Findings**
+* **Strong Correlations (>0.7):**
+  * `taskspernode` & `taskspercpu`
+* **Moderate Correlations (0.4-0.7):**
+  * `power` & `memory`
+  * `numnodes` & `numtasks`
+* **Weak Correlations (<0.4):**
+  * `numnodes` & `executiontime`
+  * `executiontime` & `power`
 
-1.**Workload Patterns:**
+### 5. Resource Utilization Optimization
 
-  * Weekdays show higher computational load, peaking during business hours (6 AM - 7 PM).
+#### High Utilization Periods Identified
 
-  * Weekends exhibit reduced execution times.
+* December 1st (early hours)  
+* December 3rd (mid-day)  
+* December 5th (mid-day and evening)  
+* December 6th (mid-day and evening)  
+* December 7th (early hours)
 
-2.**Optimal Predictive Model:** Random Forest achieved the lowest error metrics:
+#### Optimization Strategies
 
-  * RMSE: 11.86
+* **Application-Level Optimization:**
+  * Code optimization for high-resource applications  
+  * Algorithm improvements for resource-intensive tasks  
+  * Evaluation of alternative computational approaches
 
-  * MSE: 140.66
+* **Resource Allocation:**
+  * Dedicated resource pools for high-demand applications  
+  * Dynamic scheduling based on utilization patterns  
+  * Workload distribution optimization
 
-  * MAE: 6.67
+* **Load Balancing:**
+  * Cross-node workload distribution  
+  * Resource contention minimization  
+  * Peak usage period management
 
-3.**Correlation Insights:**
+* **Capacity Planning:**
+  * Hardware upgrade recommendations  
+  * Resource allocation policy updates  
+  * System scaling strategies
 
-  * Strong correlation between computational load and power consumption.
+---
 
-  * Moderate correlation between power and memory usage.
+## Limitations and Future Work
 
-  * Weak correlation between memory and computational load.
+### Current Limitations
 
-4.**High Utilization Periods:**
+* **Dataset Constraints:**
+  * Single week of data limits long-term pattern analysis  
+  * Potential seasonal variations not captured  
+  * Limited application diversity in sample
 
-  * Significant peaks in CPU and memory utilization on December 1st, 3rd, 5th, and 6th.
+* **Technical Challenges:**
+  * Multicollinearity between features  
+  * Negative memory consumption instances  
+  * Model generalization concerns
 
-### Strategies for Improvement
+### Future Improvements
 
-  * **Application Optimization:** Enhance efficiency of resource-intensive applications (e.g., chroma, gene, qlua).
+* **Data Enhancement:**
+  * Extended time period analysis (monthly/yearly)  
+  * Additional feature collection  
+  * Improved data quality validation
 
-  * **Resource Scheduling:** Distribute workloads to avoid contention during peak hours.
+* **Methodological Improvements:**
+  * Advanced feature engineering  
+  * Ensemble modeling approaches  
+  * Deep learning implementation
 
-  * **Load Balancing:** Dynamically allocate resources across nodes to handle spikes efficiently.
+* **Analysis Extension:**
+  * Application-specific optimization studies  
+  * Cross-system comparisons  
+  * Long-term trend analysis
 
-  * **Capacity Planning:** Use insights from patterns to plan hardware upgrades and allocation policies.
+---
 
-### Limitations and Future Work
+## Conclusion
 
-**Limitations**
+The project successfully analyzed Cori's resource utilization patterns, developed accurate predictive models, and proposed concrete optimization strategies. The random forest model demonstrated superior predictive performance, while the correlation analysis revealed important relationships between different resource metrics. The identified patterns and strategies provide a foundation for improving system efficiency and resource allocation.
 
-  * Data limited to a single week, reducing generalizability.
+---
 
-  * Instances of negative memory consumption suggest potential data errors.
+## Technical Notes
 
-  * Multicollinearity between features posed challenges.
-
-**Future Improvements**
-
-  * Expand analysis with larger datasets (monthly/yearly).
-
-  * Address multicollinearity using advanced techniques.
-
-  * Collaborate with domain experts to resolve data inconsistencies.
-
-### Conclusion
-
-This project successfully analyzed resource utilization on the Cori supercomputer, developed robust predictive models, and proposed actionable strategies for optimization. The methodologies and insights gained have broader applicability to other high-performance computing environments.
+* All code implementations are available in R scripts  
+* Visualization outputs are preserved in high-resolution formats  
+* Statistical analysis results are documented with confidence intervals  
+* Model parameters and hyperparameters are fully documented
