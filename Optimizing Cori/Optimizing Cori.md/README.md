@@ -194,10 +194,3 @@ This project analyzes resource utilization patterns on the NERSC Cori supercompu
 The project successfully analyzed Cori's resource utilization patterns, developed accurate predictive models, and proposed concrete optimization strategies. The random forest model demonstrated superior predictive performance, while the correlation analysis revealed important relationships between different resource metrics. The identified patterns and strategies provide a foundation for improving system efficiency and resource allocation.
 
 ---
-
-## Technical Notes
-
-* All code implementations are available in R scripts  
-* Visualization outputs are preserved in high-resolution formats  
-* Statistical analysis results are documented with confidence intervals  
-* Model parameters and hyperparameters are fully documented
